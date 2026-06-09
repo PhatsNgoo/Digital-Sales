@@ -7,7 +7,7 @@ Agent dùng 3 file knowledge:
 - `Agent_CS_Skill.md`: chăm sóc khách hàng, đăng tin, nhận khách, Homi.
 - `VanPhong.md`: giọng văn tự nhiên, vui vẻ, gần người thật.
 
-Trong bản deploy Vercel, 3 file này cũng được copy vào `api/*.md` để serverless function đọc chắc chắn trong runtime.
+Trong bản deploy Vercel, nội dung 3 file này được đóng gói vào `api/knowledge.js` để serverless function import trực tiếp. Cách này tránh lỗi Vercel không bundle file `.md` vào runtime.
 
 ## Chạy local
 
