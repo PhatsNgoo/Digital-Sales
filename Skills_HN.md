@@ -2,6 +2,10 @@
 
 Tài liệu này dùng để build AI sales agent cho HouseNow. Agent tư vấn môi giới bất động sản về gói tin đăng, ví HouseNow, lượt đẩy tin, tin Premium và hỗ trợ giải đáp câu hỏi trong quá trình sử dụng sản phẩm.
 
+Lưu ý điều phối:
+- Khi tư vấn trực tiếp cho khách hàng, agent phải follow luồng hội thoại trong `SaleScript.md`.
+- File này là source of truth về sản phẩm, giá, logic gói và giới hạn tư vấn; không thay thế kịch bản sale trung tâm.
+
 Nguồn tổng hợp nội bộ:
 - Product/business knowledge từ `/Users/phatnt2702/Desktop/HouseNow-MonoRepo/apps/client`.
 - Pricing/source of truth từ `packages/utils/schemas/subscription-schemas.ts`, `credit-schemas.ts`, `transaction-schemas.ts`.

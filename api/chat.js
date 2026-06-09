@@ -1,6 +1,19 @@
-import { csSkill, salesSkill, voice } from "./knowledge.js";
+import { csSkill, regionKnowledge, saleScript, salesSkill, voice } from "./knowledge.js";
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const PAYMENT_DESCRIPTION_PREFIX =
+  process.env.PAYMENT_DESCRIPTION_PREFIX || "HouseNow";
+
+const PACKAGE_AMOUNTS = [
+  { pattern: /\bmax\b|cao cấp/i, amount: 1599000, label: "Gói Max 1 tháng" },
+  { pattern: /\bpro\b|chuyên nghiệp/i, amount: 900000, label: "Gói Pro 1 tháng" },
+  { pattern: /\bbasic\b|cơ bản/i, amount: 599000, label: "Gói Basic 15 ngày" },
+  { pattern: /100\s*(lượt|boost|đẩy)/i, amount: 650000, label: "Gói 100 lượt boost" },
+  { pattern: /50\s*(lượt|boost|đẩy)/i, amount: 350000, label: "Gói 50 lượt boost" },
+  { pattern: /30\s*(lượt|boost|đẩy)/i, amount: 230000, label: "Gói 30 lượt boost" },
+  { pattern: /premium|tin\s*(premium|nhận khách|mở khóa)/i, amount: 120000, label: "1 tin Premium" },
+  { pattern: /boost|đẩy tin|lượt đẩy/i, amount: 10000, label: "1 lượt boost" },
+];
 
 let promptCache = "";
 
@@ -10,14 +23,21 @@ function buildSystemPrompt() {
   promptCache = [
     "Bạn là AI sales & customer success agent của HouseNow.",
     "Mục tiêu: tư vấn khách hàng/môi giới về gói HouseNow, tin Premium, lượt đẩy, ví HouseNow, cách đăng tin, cách nhận khách và tính năng Homi.",
+    "Luồng tư vấn bắt buộc phải follow SALE SCRIPT bên dưới. Các knowledge khác chỉ dùng để bổ sung thông tin sản phẩm, CS và văn phong.",
+    "Khi khách hỏi nên đăng tin ở khu vực nào, dự án nào, phân khúc giá nào hoặc loại căn nào nhiều khách quan tâm/ít cạnh tranh, hãy dùng REGION KNOWLEDGE. Không tự bịa số liệu ngoài REGION KNOWLEDGE.",
     "Luôn trả lời tiếng Việt. Xưng em, gọi khách là anh/chị. Văn phong tự nhiên, vui vẻ vừa đủ, gần người thật, nhưng không nói quá và không cam kết kết quả chắc chắn.",
     "Chỉ dùng knowledge base bên dưới làm nguồn sự thật. Nếu thiếu dữ liệu, nói cần kiểm tra thêm hoặc chuyển CS/human.",
     "Không tự bịa khuyến mãi, bonus, chính sách hoàn tiền, thuật toán chi tiết, tỷ lệ hiển thị, số lead chắc chắn hoặc cam kết giao dịch.",
     "USP cần thể hiện đúng ngữ cảnh: HouseNow tận dụng thuật toán tối ưu hiển thị theo chất lượng dữ liệu, độ phù hợp nhu cầu và tín hiệu tương tác, thay vì chỉ ưu tiên ai trả tiền nhiều hơn thì lên trước.",
     "Nếu khách gặp lỗi thanh toán, lỗi tài khoản, hoàn tiền, hóa đơn, dữ liệu cá nhân hoặc khiếu nại: thu thập số điện thoại tài khoản, mã tin/giao dịch nếu có, ảnh chụp lỗi/chứng từ, thời điểm phát sinh, rồi chuyển CS/human.",
     "Không yêu cầu OTP, mật khẩu hoặc thông tin nhạy cảm không cần thiết.",
+    "Khi khách muốn mua/thanh toán/quét QR, hãy xác nhận ngắn gọn gói hoặc dịch vụ khách đang muốn mua. Không tự xác nhận đã thanh toán thành công.",
     "Hãy chia câu trả lời thành 1-4 tin nhắn ngắn như người thật đang chat. Mỗi tin nhắn nên tự nhiên, không quá dài, không tách vụn câu vô nghĩa.",
     'Luôn trả về JSON hợp lệ đúng format: {"messages":["tin nhắn 1","tin nhắn 2"]}. Không bọc markdown, không thêm chữ ngoài JSON.',
+    "\n--- SALE SCRIPT - FOLLOW THIS FIRST ---\n",
+    saleScript,
+    "\n--- REGION KNOWLEDGE ---\n",
+    regionKnowledge,
     "\n--- SALES KNOWLEDGE ---\n",
     salesSkill,
     "\n--- CUSTOMER SUCCESS KNOWLEDGE ---\n",
@@ -102,6 +122,72 @@ function splitReplyIntoMessages(reply) {
   return messages.slice(0, 4);
 }
 
+function hasPaymentIntent(text) {
+  return /(mua|thanh toán|chốt|lấy gói|quét|qr|chuyển khoản|bank|nạp ví)/i.test(text);
+}
+
+function extractExplicitAmount(text) {
+  const amountMatch = text.match(/(\d{1,3}(?:[.,]\d{3})+|\d+)\s*(đ|vnd|vnđ|k|nghìn|triệu|tr|m)?/i);
+  if (!amountMatch) return null;
+
+  const rawNumber = amountMatch[1].replace(/[.,]/g, "");
+  let amount = Number(rawNumber);
+  const unit = (amountMatch[2] || "").toLowerCase();
+
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  if (unit === "k" || unit === "nghìn") amount *= 1000;
+  if (unit === "triệu" || unit === "tr" || unit === "m") amount *= 1000000;
+
+  return amount >= 10000 ? amount : null;
+}
+
+function detectPaymentItem(text) {
+  const explicitAmount = extractExplicitAmount(text);
+  if (explicitAmount) {
+    return {
+      amount: explicitAmount,
+      label: "Thanh toán HouseNow",
+    };
+  }
+
+  return PACKAGE_AMOUNTS.find((item) => item.pattern.test(text)) || null;
+}
+
+function createPaymentQr(latestUserMessage, assistantMessages) {
+  const bankId = process.env.VIETQR_BANK_ID;
+  const accountNo = process.env.VIETQR_ACCOUNT_NO;
+  const accountName = process.env.VIETQR_ACCOUNT_NAME;
+
+  const combinedText = `${latestUserMessage}\n${assistantMessages.join("\n")}`;
+  if (!hasPaymentIntent(combinedText) || !bankId || !accountNo) return null;
+
+  const item = detectPaymentItem(combinedText);
+  if (!item) return null;
+
+  const description = `${PAYMENT_DESCRIPTION_PREFIX} ${item.label}`
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .trim()
+    .slice(0, 80);
+  const query = new URLSearchParams({
+    amount: String(item.amount),
+    addInfo: description,
+  });
+
+  if (accountName) query.set("accountName", accountName);
+
+  return {
+    amount: item.amount,
+    label: item.label,
+    bankId,
+    accountNo,
+    accountName: accountName || "",
+    description,
+    imageUrl: `https://img.vietqr.io/image/${encodeURIComponent(bankId)}-${encodeURIComponent(
+      accountNo,
+    )}-compact2.png?${query.toString()}`,
+  };
+}
+
 async function callOpenAI(messages) {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("Missing OPENAI_API_KEY");
@@ -166,12 +252,14 @@ export default async function handler(req, res) {
     }
 
     const replyMessages = await callOpenAI(messages);
+    const paymentQr = createPaymentQr(latest.content, replyMessages);
 
     res.status(200).json({
       reply: replyMessages.join("\n\n"),
       messages: replyMessages,
+      paymentQr,
       model: MODEL,
-      knowledgeFiles: ["Skills_HN.md", "Agent_CS_Skill.md", "VanPhong.md"],
+      knowledgeFiles: ["SaleScript.md", "Region.md", "Skills_HN.md", "Agent_CS_Skill.md", "VanPhong.md"],
     });
   } catch (error) {
     res.status(500).json({

@@ -20,6 +20,48 @@ function renderMessage(role, content) {
   return node;
 }
 
+function renderPaymentQr(qr) {
+  const node = document.createElement("article");
+  node.className = "message assistant qr-card";
+
+  const title = document.createElement("h3");
+  title.textContent = "Mã QR thanh toán";
+
+  const image = document.createElement("img");
+  image.src = qr.imageUrl;
+  image.alt = `QR thanh toán ${qr.label}`;
+  image.loading = "lazy";
+
+  const details = document.createElement("dl");
+  const rows = [
+    ["Dịch vụ", qr.label],
+    ["Số tiền", `${Number(qr.amount).toLocaleString("vi-VN")}đ`],
+    ["Ngân hàng", qr.bankId],
+    ["Số tài khoản", qr.accountNo],
+    ["Chủ tài khoản", qr.accountName || "Theo cấu hình thanh toán"],
+    ["Nội dung", qr.description],
+  ];
+
+  rows.forEach(([label, value]) => {
+    const wrapper = document.createElement("div");
+    const dt = document.createElement("dt");
+    const dd = document.createElement("dd");
+    dt.textContent = label;
+    dd.textContent = value;
+    wrapper.append(dt, dd);
+    details.appendChild(wrapper);
+  });
+
+  const note = document.createElement("p");
+  note.textContent =
+    "Anh/chị quét QR bằng app ngân hàng. Sau khi chuyển khoản, hệ thống/CS sẽ cần kiểm tra giao dịch trước khi xác nhận kích hoạt.";
+
+  node.append(title, image, details, note);
+  messagesEl.appendChild(node);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return node;
+}
+
 function renderHistory() {
   messagesEl.innerHTML = "";
   history.forEach((message) => renderMessage(message.role, message.content));
@@ -40,6 +82,10 @@ function wait(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function randomBubbleDelay() {
+  return 5000 + Math.floor(Math.random() * 10001);
+}
+
 async function renderAssistantMessages(messages) {
   const validMessages = messages
     .filter((message) => typeof message === "string" && message.trim())
@@ -48,7 +94,7 @@ async function renderAssistantMessages(messages) {
   for (const [index, message] of validMessages.entries()) {
     if (index > 0) {
       const typingNode = renderMessage("assistant typing", "Đang soạn phản hồi...");
-      await wait(Math.min(900, 360 + message.length * 8));
+      await wait(randomBubbleDelay());
       typingNode.remove();
     }
     renderMessage("assistant", message);
@@ -88,12 +134,18 @@ async function sendMessage(content) {
 
     history.push({ role: "assistant", content: combinedReply });
     await renderAssistantMessages(assistantMessages);
+    if (data.paymentQr?.imageUrl) {
+      const typingNode = renderMessage("assistant typing", "Đang tạo mã QR...");
+      await wait(randomBubbleDelay());
+      typingNode.remove();
+      renderPaymentQr(data.paymentQr);
+    }
     statusText.textContent = `Đang dùng ${data.model}`;
   } catch (error) {
     typingNode.remove();
     renderMessage(
       "error",
-      `Lỗi: ${error.message}\n\nNếu lỗi liên quan OPENAI_API_KEY, anh/chị kiểm tra biến môi trường trên Vercel. Nếu lỗi liên quan knowledge file, hãy redeploy bản mới nhất có thư mục api/*.md.`,
+      `Lỗi: ${error.message}\n\nAnh/chị kiểm tra OPENAI_API_KEY, quota/billing của OpenAI và các biến thanh toán VietQR nếu đang test tạo mã QR.`,
     );
     statusText.textContent = "Lỗi cấu hình/API";
   } finally {
