@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "api/chat.js": {
-      "includeFiles": "*.md"
+      "includeFiles": "api/*.md"
     }
   }
 }

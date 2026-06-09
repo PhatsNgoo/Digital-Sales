@@ -68,7 +68,7 @@ async function sendMessage(content) {
     typingNode.remove();
     renderMessage(
       "error",
-      `Lỗi: ${error.message}\n\nNếu chạy local hoặc deploy Vercel, anh/chị kiểm tra biến môi trường OPENAI_API_KEY đã được cấu hình chưa.`,
+      `Lỗi: ${error.message}\n\nNếu lỗi liên quan OPENAI_API_KEY, anh/chị kiểm tra biến môi trường trên Vercel. Nếu lỗi liên quan knowledge file, hãy redeploy bản mới nhất có thư mục api/*.md.`,
     );
     statusText.textContent = "Lỗi cấu hình/API";
   } finally {

@@ -1,16 +1,19 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const ROOT = process.cwd();
+const API_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 let promptCache = "";
 
 function readKnowledgeFile(fileName) {
   const candidates = [
+    path.join(API_DIR, fileName),
     path.join(ROOT, fileName),
     path.join(ROOT, "HouseNow_Ai_Agent", fileName),
-    path.join(path.dirname(new URL(import.meta.url).pathname), "..", fileName),
+    path.join(API_DIR, "..", fileName),
   ];
 
   for (const filePath of candidates) {
@@ -21,7 +24,9 @@ function readKnowledgeFile(fileName) {
     }
   }
 
-  throw new Error(`Cannot read knowledge file: ${fileName}`);
+  throw new Error(
+    `Cannot read knowledge file: ${fileName}. Checked: ${candidates.join(", ")}`,
+  );
 }
 
 function buildSystemPrompt() {
