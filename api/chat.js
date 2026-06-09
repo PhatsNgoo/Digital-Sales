@@ -16,6 +16,8 @@ function buildSystemPrompt() {
     "USP cần thể hiện đúng ngữ cảnh: HouseNow tận dụng thuật toán tối ưu hiển thị theo chất lượng dữ liệu, độ phù hợp nhu cầu và tín hiệu tương tác, thay vì chỉ ưu tiên ai trả tiền nhiều hơn thì lên trước.",
     "Nếu khách gặp lỗi thanh toán, lỗi tài khoản, hoàn tiền, hóa đơn, dữ liệu cá nhân hoặc khiếu nại: thu thập số điện thoại tài khoản, mã tin/giao dịch nếu có, ảnh chụp lỗi/chứng từ, thời điểm phát sinh, rồi chuyển CS/human.",
     "Không yêu cầu OTP, mật khẩu hoặc thông tin nhạy cảm không cần thiết.",
+    "Hãy chia câu trả lời thành 1-4 tin nhắn ngắn như người thật đang chat. Mỗi tin nhắn nên tự nhiên, không quá dài, không tách vụn câu vô nghĩa.",
+    'Luôn trả về JSON hợp lệ đúng format: {"messages":["tin nhắn 1","tin nhắn 2"]}. Không bọc markdown, không thêm chữ ngoài JSON.',
     "\n--- SALES KNOWLEDGE ---\n",
     salesSkill,
     "\n--- CUSTOMER SUCCESS KNOWLEDGE ---\n",
@@ -49,6 +51,55 @@ function normalizeMessages(messages) {
       role: message.role,
       content: message.content.trim().slice(0, 5000),
     }));
+}
+
+function splitReplyIntoMessages(reply) {
+  const trimmed = String(reply || "").trim();
+  if (!trimmed) return ["Dạ hiện em chưa tạo được phản hồi. Anh/chị thử hỏi lại giúp em nha."];
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed.messages)) {
+      const messages = parsed.messages
+        .filter((message) => typeof message === "string" && message.trim())
+        .map((message) => message.trim())
+        .slice(0, 4);
+
+      if (messages.length > 0) return messages;
+    }
+  } catch {
+    // Fall through to heuristic splitting for plain text responses.
+  }
+
+  const paragraphParts = trimmed
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (paragraphParts.length > 1) return paragraphParts.slice(0, 4);
+
+  const sentenceParts = trimmed
+    .split(/(?<=[.!?ạ])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (sentenceParts.length <= 2) return [trimmed];
+
+  const messages = [];
+  let current = "";
+
+  for (const sentence of sentenceParts) {
+    const next = current ? `${current} ${sentence}` : sentence;
+    if (next.length > 190 && current) {
+      messages.push(current);
+      current = sentence;
+    } else {
+      current = next;
+    }
+  }
+
+  if (current) messages.push(current);
+  return messages.slice(0, 4);
 }
 
 async function callOpenAI(messages) {
@@ -89,7 +140,7 @@ async function callOpenAI(messages) {
       .join("")
       .trim();
 
-  return outputText || "Dạ hiện em chưa tạo được phản hồi. Anh/chị thử hỏi lại giúp em nha.";
+  return splitReplyIntoMessages(outputText);
 }
 
 export default async function handler(req, res) {
@@ -114,10 +165,11 @@ export default async function handler(req, res) {
       return;
     }
 
-    const reply = await callOpenAI(messages);
+    const replyMessages = await callOpenAI(messages);
 
     res.status(200).json({
-      reply,
+      reply: replyMessages.join("\n\n"),
+      messages: replyMessages,
       model: MODEL,
       knowledgeFiles: ["Skills_HN.md", "Agent_CS_Skill.md", "VanPhong.md"],
     });

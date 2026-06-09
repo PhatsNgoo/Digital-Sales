@@ -36,6 +36,25 @@ function autosizeInput() {
   input.style.height = `${Math.min(input.scrollHeight, 170)}px`;
 }
 
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function renderAssistantMessages(messages) {
+  const validMessages = messages
+    .filter((message) => typeof message === "string" && message.trim())
+    .map((message) => message.trim());
+
+  for (const [index, message] of validMessages.entries()) {
+    if (index > 0) {
+      const typingNode = renderMessage("assistant typing", "Đang soạn phản hồi...");
+      await wait(Math.min(900, 360 + message.length * 8));
+      typingNode.remove();
+    }
+    renderMessage("assistant", message);
+  }
+}
+
 async function sendMessage(content) {
   const trimmed = content.trim();
   if (!trimmed) return;
@@ -61,8 +80,14 @@ async function sendMessage(content) {
     }
 
     typingNode.remove();
-    history.push({ role: "assistant", content: data.reply });
-    renderMessage("assistant", data.reply);
+    const assistantMessages =
+      Array.isArray(data.messages) && data.messages.length > 0
+        ? data.messages
+        : [data.reply];
+    const combinedReply = assistantMessages.join("\n\n");
+
+    history.push({ role: "assistant", content: combinedReply });
+    await renderAssistantMessages(assistantMessages);
     statusText.textContent = `Đang dùng ${data.model}`;
   } catch (error) {
     typingNode.remove();
