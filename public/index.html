@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HouseNow AI Agent</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo">HN</div>
+          <div>
+            <p>HouseNow</p>
+            <h1>AI Sale Agent</h1>
+          </div>
+        </div>
+
+        <section class="panel">
+          <h2>Agent dùng 3 skills</h2>
+          <ul class="skill-list">
+            <li>Sales: gói, Premium, boost, ví</li>
+            <li>CS: đăng tin, nhận khách, Homi</li>
+            <li>Văn phong: tự nhiên, vui vẻ</li>
+          </ul>
+        </section>
+
+        <section class="panel prompt-panel">
+          <h2>Test nhanh</h2>
+          <button data-prompt="Em muốn đăng 8 căn chung cư trong tháng này, nên bắt đầu thế nào?">
+            Tư vấn đăng 8 căn
+          </button>
+          <button data-prompt="Tin của tôi đăng rồi nhưng chưa thấy khách, phải làm sao?">
+            Chưa có khách
+          </button>
+          <button data-prompt="Homi là gì, có giúp môi giới bán tốt hơn không?">
+            Hỏi về Homi
+          </button>
+          <button data-prompt="HouseNow khác gì các nền tảng cứ ai trả nhiều tiền hơn thì lên trước?">
+            USP HouseNow
+          </button>
+        </section>
+
+        <section class="panel small">
+          <h2>Trạng thái</h2>
+          <p id="statusText">Sẵn sàng test</p>
+        </section>
+      </aside>
+
+      <section class="chat">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow">Live demo</p>
+            <h2>Chat với AI agent HouseNow</h2>
+          </div>
+          <button id="resetButton" type="button" title="Tạo cuộc trò chuyện mới">
+            New chat
+          </button>
+        </header>
+
+        <div id="messages" class="messages" aria-live="polite"></div>
+
+        <form id="chatForm" class="composer">
+          <textarea
+            id="messageInput"
+            rows="1"
+            placeholder="Nhập câu hỏi của khách hàng/môi giới..."
+            autocomplete="off"
+            required
+          ></textarea>
+          <button id="sendButton" type="submit">Gửi</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
